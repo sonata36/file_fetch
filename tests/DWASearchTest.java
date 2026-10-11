@@ -1,6 +1,8 @@
 import java.io.ByteArrayInputStream;
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
+import java.nio.file.Files;
+import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.List;
 
@@ -65,6 +67,59 @@ public final class DWASearchTest {
             check(detail.indexOf("Full Name:ALPHA A") < detail.indexOf("Full Name:BETA B"));
             check(detail.contains("Full Name:ALPHA A\nRank:1 | * | 1\n"));
             check(detail.contains("Full Name:BETA B\nRank:2 | 1 | *\n"));
+        });
+        test("file input handles UTF-8 BOM and multiple commands", () -> {
+            Path input = Files.createTempFile("dwa-input-", ".txt");
+            Path output = Files.createTempFile("dwa-output-", ".txt");
+            try {
+                Files.writeString(input, "\uFEFFplayers\r\nresult women 1m springboard\r\n",
+                        StandardCharsets.UTF_8);
+                DWASearch.run(input, output, real);
+                equal(DWASearch.execute(List.of("players", "result women 1m springboard"), real),
+                        Files.readString(output, StandardCharsets.UTF_8));
+            } finally {
+                Files.deleteIfExists(input);
+                Files.deleteIfExists(output);
+            }
+        });
+        test("input and output may be the same file", () -> {
+            Path file = Files.createTempFile("dwa-same-", ".txt");
+            try {
+                Files.writeString(file, "result women 1m springboard\n", StandardCharsets.UTF_8);
+                DWASearch.run(file, file, real);
+                equal(real.displayResultsForEachEvent("women 1m springboard", false),
+                        Files.readString(file, StandardCharsets.UTF_8));
+            } finally {
+                Files.deleteIfExists(file);
+            }
+        });
+        test("large command file streams all output", () -> {
+            Path input = Files.createTempFile("dwa-large-input-", ".txt");
+            Path output = Files.createTempFile("dwa-large-output-", ".txt");
+            try {
+                Files.writeString(input, "unknown\n".repeat(20_000), StandardCharsets.UTF_8);
+                DWASearch.run(input, output, real);
+                equal("Error\n-----\n".repeat(20_000),
+                        Files.readString(output, StandardCharsets.UTF_8));
+            } finally {
+                Files.deleteIfExists(input);
+                Files.deleteIfExists(output);
+            }
+        });
+        test("failed input leaves existing output intact", () -> {
+            Path output = Files.createTempFile("dwa-preserve-", ".txt");
+            Path missing = output.resolveSibling(output.getFileName() + ".missing");
+            try {
+                Files.writeString(output, "previous", StandardCharsets.UTF_8);
+                try {
+                    DWASearch.run(missing, output, real);
+                    throw new AssertionError("expected IOException");
+                } catch (IOException expected) {
+                    equal("previous", Files.readString(output, StandardCharsets.UTF_8));
+                }
+            } finally {
+                Files.deleteIfExists(output);
+            }
         });
         System.out.println("PASS " + passed + " tests");
     }

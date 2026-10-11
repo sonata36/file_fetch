@@ -1,7 +1,10 @@
+import java.io.BufferedReader;
+import java.io.BufferedWriter;
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.nio.file.StandardCopyOption;
 import java.util.List;
 
 /** Command-line entry point: java -jar DWASearch.jar input.txt output.txt */
@@ -14,15 +17,35 @@ public final class DWASearch {
             System.exit(2);
         }
         try {
-            List<String> commands = Files.readAllLines(Path.of(args[0]), StandardCharsets.UTF_8);
-            if (!commands.isEmpty() && commands.get(0).startsWith("\uFEFF")) {
-                commands.set(0, commands.get(0).substring(1));
-            }
             CoreModule core = CoreModule.fromBundledData();
-            Files.writeString(Path.of(args[1]), execute(commands, core), StandardCharsets.UTF_8);
+            run(Path.of(args[0]), Path.of(args[1]), core);
         } catch (IOException | IllegalArgumentException e) {
             System.err.println("DWASearch: " + e.getMessage());
             System.exit(1);
+        }
+    }
+
+    /** Stream commands to a temporary sibling, then replace the output on success. */
+    static void run(Path input, Path output, CoreModule core) throws IOException {
+        Path destination = output.toAbsolutePath().normalize();
+        Path temporary = null;
+        try {
+            try (BufferedReader reader = Files.newBufferedReader(input, StandardCharsets.UTF_8)) {
+                temporary = Files.createTempFile(destination.getParent(), ".dwa-", ".tmp");
+                try (BufferedWriter writer = Files.newBufferedWriter(temporary, StandardCharsets.UTF_8)) {
+                    String command;
+                    boolean first = true;
+                    while ((command = reader.readLine()) != null) {
+                        if (first && command.startsWith("\uFEFF")) command = command.substring(1);
+                        first = false;
+                        writer.write(executeOne(command, core));
+                    }
+                }
+            }
+            Files.move(temporary, destination, StandardCopyOption.REPLACE_EXISTING);
+            temporary = null;
+        } finally {
+            if (temporary != null) Files.deleteIfExists(temporary);
         }
     }
 

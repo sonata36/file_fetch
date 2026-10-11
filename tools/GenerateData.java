@@ -22,7 +22,7 @@ public final class GenerateData {
     private static final Pattern DIVE = Pattern.compile("\\b[0-9]{3,5}[A-D]\\s+[0-9]+(?:\\.[0-9]+)?\\b");
     private static final Map<String, String> COUNTRIES = countries();
 
-    private record Player(String name, String gender, String country) {}
+    private record Player(String name, String gender, String countryCode, String country) {}
     private record Row(String event, String stage, String rank, String name,
                        List<String> dives, String total) {}
 
@@ -57,7 +57,8 @@ public final class GenerateData {
             if (m.matches()) {
                 String country = COUNTRIES.get(m.group(2));
                 if (country == null) throw new IllegalStateException("Unknown country " + m.group(2));
-                Player p = new Player(m.group(1).trim(), m.group(3).equals("M") ? "Male" : "Female", country);
+                Player p = new Player(m.group(1).trim(), m.group(3).equals("M") ? "Male" : "Female",
+                        m.group(2), country);
                 if (players.putIfAbsent(p.name, p) != null) throw new IllegalStateException("Duplicate " + p.name);
             }
         }
@@ -150,6 +151,7 @@ public final class GenerateData {
         String combined = rawName.replaceAll("\\s+", " ").trim();
         String normalized = normalize(combined);
         String name = null;
+        List<Player> participants = new ArrayList<>();
         if (sync) {
             for (String first : players.keySet()) {
                 String prefix = normalize(first) + " ";
@@ -158,6 +160,8 @@ public final class GenerateData {
                 for (String candidate : players.keySet()) {
                     if (normalize(candidate).equals(second)) {
                         name = first.compareTo(candidate) <= 0 ? first + " & " + candidate : candidate + " & " + first;
+                        participants.add(players.get(first));
+                        participants.add(players.get(candidate));
                         break;
                     }
                 }
@@ -165,7 +169,11 @@ public final class GenerateData {
             }
         } else {
             for (String candidate : players.keySet()) {
-                if (normalize(candidate).equals(normalized)) { name = candidate; break; }
+                if (normalize(candidate).equals(normalized)) {
+                    name = candidate;
+                    participants.add(players.get(candidate));
+                    break;
+                }
             }
         }
         if (name == null) {
@@ -178,6 +186,12 @@ public final class GenerateData {
         }
         if (country == null || !COUNTRIES.containsKey(country)) {
             throw new IllegalStateException(event + "/" + stage + ": invalid country " + country);
+        }
+        for (Player participant : participants) {
+            if (!participant.countryCode.equals(country)) {
+                throw new IllegalStateException(event + "/" + stage + ": country mismatch for "
+                        + participant.name + ": " + country + " != " + participant.countryCode);
+            }
         }
         return new Row(event, stage, rank, name, dives, total);
     }

@@ -7,9 +7,9 @@ if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 javac -encoding UTF-8 -d .build/app src/DWASearch.java src/CoreModule.java src/Lib.java
 if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 Copy-Item src/data/players.tsv, src/data/results.tsv .build/app/data/ -Force
-javac -encoding UTF-8 -cp .build/app -d .build/tests tests/DWASearchTest.java tests/Benchmark.java
+javac -encoding UTF-8 -d .build/tests src/DWASearch.java src/CoreModule.java src/Lib.java tests/DWASearchTest.java tests/Benchmark.java
 if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-java -cp '.build/app;.build/tests' DWASearchTest
+java -cp '.build/tests;.build/app' DWASearchTest
 if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 $jarTmp = (Resolve-Path '.build/tmp').Path
 jar "-J-Djava.io.tmpdir=$jarTmp" --create --file DWASearch.jar --main-class DWASearch -C .build/app .
